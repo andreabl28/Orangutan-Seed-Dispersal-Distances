@@ -1,0 +1,360 @@
+---
+title: "Exploratory Data Analysis, Sample Sizes, Figures, Summary Stats on Dispersal Distances in Gunung Palung National Park, Indonesia"
+author: "Andrea Blackburn"
+output: html_document
+
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cowplot)
+library(sm)
+library(moments)
+library(extrafont)
+#library(remotes)
+#remotes::install_version("Rttf2pt1", version = "1.3.8")
+#extrafont::font_import()
+
+dd<-read.csv("Bornean_orangutan_seed_dispersal_distances_dataset.csv")
+dd<-tbl_df(dd)
+dd$Age.sex<-as.factor(dd$Age.sex)
+```
+
+
+#### Mean, Variance, SD, & Maximum Dispersal Distances for each duration of gut transit time (45, 60, 80, 125-hours)
+evidence of overdispersion
+
+```{r}
+#sample sizes for each duration of gut transit time
+length(na.omit(dd$DD.45))
+length(na.omit(dd$DD.60))
+length(na.omit(dd$DD.80))
+length(na.omit(dd$DD.125))
+
+#45 hours Transit Time (TT) 
+mean(dd$DD.45, na.rm=TRUE)
+var(dd$DD.45, na.rm=TRUE)
+max(dd$DD.45, na.rm=TRUE)
+sd(dd$DD.45, na.rm=TRUE)
+
+#60 hours TT
+mean(dd$DD.60, na.rm=TRUE)
+var(dd$DD.60, na.rm=TRUE)
+max(dd$DD.60, na.rm=TRUE)
+sd(dd$DD.60, na.rm=TRUE)
+
+#80 hours TT
+mean(dd$DD.80, na.rm=TRUE)
+var(dd$DD.80, na.rm=TRUE)
+max(dd$DD.80, na.rm=TRUE)
+sd(dd$DD.80, na.rm=TRUE)
+
+#125 hours TT
+mean(dd$DD.125, na.rm=TRUE)
+var(dd$DD.125, na.rm=TRUE)
+max(dd$DD.125, na.rm=TRUE)
+sd(dd$DD.125, na.rm=TRUE)
+```
+
+###Graph of modeled dispersal distances by gut passage rates
+```{r}
+#create a dataset for each duration of gut passage 
+#remove all NA's
+dd45<-filter(dd, DD.45 != "0")
+dd60<-filter(dd, DD.60 != "0")
+dd80<-filter(dd, DD.80 != "0")
+dd125<-filter(dd, DD.125 != "0")
+
+w<-dd45$DD.45
+x<-dd60$DD.60
+y<-dd80$DD.80
+z<-dd125$DD.125
+
+#calculate skewness & kurtosis
+#45-hour GRT
+skewness(w)
+kurtosis(w)
+#60-hour GRT
+skewness(x)
+kurtosis(x)
+#80-hour GRT
+skewness(y)
+kurtosis(y)
+#125-hour GRT
+skewness(z)
+kurtosis(z)
+
+#combine all dispersal distances into 1 vector
+c_all<-c(w,y,x,z)
+#add GRT 
+names<-c(rep(45, length(w)), rep(60, length(x)), rep(80, length(y)), rep(125, length(z)))
+#create a df
+density<-data.frame(c_all, names)
+density$names<-as.factor(density$names)
+
+plot_disp_density_gut_passage_rate<- ggplot(density, aes(x=c_all, color = names)) + 
+  geom_density(size=1.45) + 
+  scale_color_manual(values=c("#4682B4", "#AF46B4", "#D6604D", "#4BB446"))+
+  theme_classic() +
+  #set numbers to scienctific format
+  scale_y_continuous(labels=function(n){format(n, scientific = FALSE)})+
+  xlab("Density") + ylab("Dispersal Distance (m)") +
+  theme(legend.position = c(0.8, 0.8))+
+  theme(axis.text.x = element_text(family = "Arial", size = 20)) +
+  theme(axis.text.y = element_text(family = "Arial", size = 20)) +
+  theme(axis.title.x = element_text(family = "Arial", size = 20)) +
+  theme(axis.title.y = element_text(family = "Arial",vjust = 2,size = 20)) +
+  theme(legend.title = element_text(family = "Arial", size = 19)) +
+  theme(legend.text = element_text(family = "Arial", size = 18)) +
+  guides(color = guide_legend(override.aes = list(fill = c("#4682B4", "#AF46B4", "#D6604D", "#4BB446")))) +
+  labs(color ="Gut Passage\n   Times (hr)", size=15)
+plot_disp_density_gut_passage_rate
+  
+#ggsave("disp_density_gut_passage_rate.png", plot=plot_disp_density_gut_passage_rate, dpi=350, width =10, height =7)
+```
+##Percent of dispersal distances >100m
+```{r}
+#45-hours
+dd45_100<-filter(dd45, DD.45 >100)
+97/113
+#60-hours
+dd60_100<-filter(dd60, DD.60 >100)
+102/111
+#80-hours
+dd80_100<-filter(dd80, DD.80 >100)
+85/89
+#125-hours
+dd125_100<-filter(dd4125, DD.125 >100)
+31/31
+```
+###Dispersal distances by sex
+Walimah (WA) and Bilbo (BIL) are in more than one age-sex class category
+
+```{r}
+#sample sizes by age-sex class
+table(dd$Age.sex)
+
+#how many individuals per age-sex class
+dd_null<-filter(dd, Age.sex == "Nulliparous Female")
+length(unique(dd_null$Orangutan))
+
+dd_par<-filter(dd, Age.sex == "Parous Female")
+length(unique(dd_par$Orangutan))
+
+dd_flm<-filter(dd, Age.sex == "Flanged Male")
+length(unique(dd_flm$Orangutan))
+
+dd_uflm<-filter(dd, Age.sex == "Unflanged Male")
+length(unique(dd_uflm$Orangutan))
+```
+Summary Stats (mean, standard deviation, and maximum) of seed dispersal distances for four gut retention times (GRT)
+```{r}
+summary_stats<- function(df, Distance, Age.sex) {
+     print("sample size") 
+     print(length(na.omit(Distance)))
+     print("mean distance")
+     print(mean(Distance, na.rm=TRUE))
+     print("standard deviation")
+     print(sd(Distance, na.rm=TRUE))
+     print("mean distance by age-sex class")
+     print(aggregate(Distance ~ Age.sex, data = df, FUN = mean, na.rm = TRUE))
+     print("standard deviation by age-sex class")
+     print(aggregate(Distance ~ Age.sex, data = df, FUN = sd, na.rm = TRUE))
+     print("max distance by age-sex class")
+     print(aggregate(Distance ~ Age.sex, data = df, FUN = max, na.rm = TRUE))
+}
+
+#45-hours-----
+print("45-hours GRT")
+summary_stats(dd45, dd45$DD.45, dd45$Age.sex)
+#60-hours-----
+print("60-hours GRT")
+summary_stats(dd60, dd60$DD.60, dd60$Age.sex)
+#80-hours-----
+print("80-hours GRT")
+summary_stats(dd80, dd80$DD.80, dd80$Age.sex)
+#125-hours-----
+print("125-hours GRT")
+summary_stats(dd125, dd125$DD.125, dd125$Age.sex)
+
+#only for lost & unable to follow series
+#Filter for the lost follows for 45 and 60-hours GRT
+dd45_lost<-filter(dd45, Lost_unable_to_follow == "Y")
+dd60_lost<-filter(dd60, Lost_unable_to_follow == "Y")
+#45-hours-----
+print("45-hours GRT")
+summary_stats(dd45_lost, dd45_lost$DD.45, dd45_lost$Age.sex)
+#60-hours-----
+print("60-hours GRT")
+summary_stats(dd60_lost, dd60_lost$DD.60, dd60_lost$Age.sex)
+
+```
+Seed dispersal distances by mature and ripe fruit availability (Z-scores)
+```{r}
+#--------45 hours
+
+g1<-ggplot(dd45, aes(x=zscore_MR, y=DD.45))+
+           geom_point(aes(colour=Age.sex, shape=Age.sex), size=3)+ theme_classic()+ 
+           geom_smooth(method='lm', formula= y~x, colour="black", size=1, fill="Gainsboro")+
+           xlab(" ") + ylab("Dispersal Distances (m)") +
+           theme(axis.text.x = element_text(family = "Arial", size=16)) +
+           theme(axis.text.y = element_text(family = "Arial", size=16)) +
+           theme(axis.title.y = element_text(family = "Arial", vjust= 6, size = 20))+
+           ggtitle("A") + 
+           theme(plot.title = element_text(lineheight=.8, face="bold",family = "Arial", size=20))+
+           theme(legend.title = element_blank())+theme(legend.position = "none")+
+           scale_shape_manual(values=c(15, 16, 17, 18)) +
+           scale_color_manual(values=c('#999999','#E69F00', '#56B4E9', 'black'))
+
+g1
+
+#--------60 hours
+g2<-ggplot(dd60, aes(x=zscore_MR, y=DD.60))+
+           geom_point(aes(colour=Age.sex, shape=Age.sex), size=3)+ theme_classic()+ 
+           geom_smooth(method='lm', formula= y~x, colour="black", size=1, fill="Gainsboro")+
+           xlab(" ") + ylab(" ") +
+           theme(axis.text.x = element_text(family = "Arial", size=16)) +
+           theme(axis.text.y = element_text(family = "Arial", size=16)) +
+           ggtitle("B") + 
+           theme(plot.title = element_text(lineheight=.8, face="bold",family = "Arial", size=20))+
+           scale_shape_manual(values=c(15, 16, 17, 18)) +
+           scale_color_manual(values=c('#999999','#E69F00', '#56B4E9', 'black'))+
+           theme(legend.title = element_blank())+theme(legend.position = "none")
+g2
+
+#--------80 hours
+
+g3<-ggplot(dd80, aes(x=zscore_MR, y=DD.80))+
+          geom_point(aes(colour=Age.sex, shape=Age.sex), size=3)+ theme_classic()+ 
+          geom_smooth(method='lm', formula= y~x, colour="black", size=1, fill="Gainsboro")+
+           xlab("Fruit Availability (z-scores)") + ylab("Dispersal Distances (m)") +
+           theme(axis.text.x = element_text(family = "Arial", size=16)) +
+           theme(axis.text.y = element_text(family = "Arial", size=16)) +
+           theme(axis.title.x = element_text(family = "Arial", vjust=-2, size=18)) +
+           theme(axis.title.y = element_text(family = "Arial", vjust=6, size = 20))+
+           ggtitle("C") + 
+           theme(plot.title = element_text(lineheight=.8, face="bold",family = "Arial", size=20))+
+           scale_shape_manual(values=c(15, 16, 17, 18))+
+           scale_color_manual(values=c('#999999','#E69F00', '#56B4E9', 'black'))+
+           theme(legend.title = element_blank())+theme(legend.position = "none")
+g3
+
+#--------125 hours
+g4<-ggplot(dd125, aes(x=zscore_MR, y=DD.125))+
+           geom_point(aes(colour=Age.sex, shape=Age.sex), size=3)+ theme_classic()+ 
+           geom_smooth(method='lm', formula= y~x, colour="black", size=1, fill="Gainsboro")+
+           xlab("Fruit Availability (z-scores)") +ylab(" ") +
+           theme(axis.text.x = element_text(family = "Arial", size=16)) +
+           theme(axis.text.y = element_text(family = "Arial", size=16)) +
+           theme(axis.title.x = element_text(family = "Arial", vjust= -2, size=18)) +
+           theme(legend.title = element_text(family = "Arial", size = 18)) +
+           theme(legend.text = element_text(family = "Arial", size = 16))+
+           labs(color='   Age-Sex Class', shape='   Age-Sex Class')+
+           ggtitle("D") + 
+           theme(plot.title = element_text(lineheight=.8, face="bold",family = "Arial", size=20))+
+           scale_shape_manual(values=c(15, 16, 17, 18)) +
+           scale_color_manual(values=c('#999999','#E69F00', '#56B4E9', 'black')) +  
+           theme(legend.position = c(.65,2.1))
+g4
+
+#cowplot package
+plot_of_grids<-plot_grid(g1, g2, g3, g4)
+plot_of_grids
+
+#ggsave("Fruit available by dispersal distance 9Aug22.png", plot=plot_of_grids, dpi=350, width =14, height =10)
+
+```
+#function to make colors transparent (Thanks to A.J. Marshall)
+```{r}
+#set degree of transparency
+my.alpha <- 80
+
+makeTransparent <- function(black, alpha = my.alpha){
+	newColor <- col2rgb(black)
+	apply(newColor, 2, function(curcoldata)			
+	     {rgb(red   = curcoldata[1],
+	          green = curcoldata[2],
+	          blue  = curcoldata[3],
+	          alpha = alpha,
+	          maxColorValue =  255)})
+}
+#select colors
+cols<-c("#7D0541","#003399",  "#FF6633", "#614051")
+tcols = makeTransparent(cols)
+```
+
+```{r}
+#45 hours DD
+glost45 <- ggplot(dd45, aes(x = Lost_unable_to_follow, y = DD.45)) +
+  geom_boxplot() + theme_classic()
+
+g_lost45 <- ggplot(dd45, aes(x = Lost_unable_to_follow, y = DD.45, fill = Age.sex)) +
+  geom_boxplot() + theme_classic() +
+  xlab("Follow Series Type")  + ylab("Dispersal distances (m)") +
+  scale_x_discrete(labels = c("Not Lost", "Lost")) +
+  ylim(0, 2300) +
+  scale_color_manual(values = cols) +
+  scale_fill_manual(values=tcols)+
+  theme(legend.position="top") +
+  theme(legend.position = c(0.1, 0.9))+
+  theme(axis.text.x = element_text(family = "Arial", size = 20)) +
+  theme(axis.text.y = element_text(family = "Arial", size = 20)) +
+  theme(axis.title.x = element_text(family = "Arial", size = 20, vjust =-0.2, 
+               margin = margin(t = 20, r = 0, b = 0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Arial",vjust = 2,size = 20)) +
+  theme(legend.title = element_text(family = "Arial", size = 18)) +
+  theme(legend.text = element_text(family = "Arial", size = 17)) +
+  labs(color ="Age Sex Class", fill ="Age Sex Class", size=17)+ 
+  guides(size = guide_legend(nrow = 4, byrow = TRUE)) + ggtitle("A") +
+  theme(plot.title = element_text(
+    lineheight = .8,
+    face = "bold",
+    family = "Arial",
+    size = 20
+  ))
+
+g_lost45
+
+#ggsave("DD45 Follow Duration.png", plot=g5_s, dpi=350, width =9, height =7)
+ggsave("Dispersal by Follow Duration and Age-Sex Class 45-hours 8Aug22.png", plot=g_lost45, dpi=350, width =9, height =7)
+
+
+#60 hours DD
+g8<-ggplot(dd2, aes(x=Lost_unable_to_follow, y=DD.60))+
+  geom_boxplot()+ theme_classic()
+g8
+
+g_lost60 <- ggplot(dd60, aes(x = Lost_unable_to_follow, y = DD.60, fill = Age.sex)) +
+  geom_boxplot(show.legend = FALSE) + theme_classic() +
+  xlab("Follow Series Type") + ylab("") +
+  scale_x_discrete(labels = c("Not Lost", "Lost")) +
+  scale_color_manual(values =cols) +
+  scale_fill_manual(values= tcols)+
+  ylim(0, 2300) +
+    theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())+
+  theme(axis.text.x = element_text(family = "Arial", size = 20)) +
+  theme(axis.title.x = element_text(family = "Arial", size = 20, vjust =-0.2, 
+               margin = margin(t = 20, r = 0, b = 0, l = 0))) +
+  theme(legend.title = element_blank())+
+  theme(legend.text = element_blank())+
+  labs(color ="Age Sex Class", fill ="Age Sex Class", size=17)+ 
+  guides(size = guide_legend(nrow = 4, byrow = TRUE)) + ggtitle("B") +
+  theme(plot.title = element_text(
+    lineheight = .8,
+    face = "bold",
+    family = "Arial",
+    size = 20
+  ))
+
+g_lost60 
+ggsave("Dispersal by Follow Duration and Age-Sex Class 60-hours 8Aug22.png", plot=g_lost60 , dpi=350, width =9, height =7)
+
+#Plot both graphs:
+g_both<-plot_grid(g_lost45 , g_lost60 , nrow=1)
+g_both
+#ggsave("Dispersal by Follow Duration and Age-Sex Class 8Aug22.png", plot=g_both, dpi=350, width =15, height =8)
+```

@@ -1,0 +1,345 @@
+---
+title: "Modeling Instraspecific Variation in Orangutan Seed Dispersal Distances in Gunung Palung National Park, Indonesia"
+author: "Andrea Blackburn"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(DHARMa)
+library(glmmTMB)
+library(dplyr)
+library(tidyr)
+library(lme4)
+library(lubridate)
+library(bbmle)
+library(MASS)
+library(rsq)
+library(optimx)
+library(knitr)
+library(lmerTest)
+library(data.table)
+```
+
+
+```{r}
+#read in seed dispersal distances
+#dataset contains phenology data (column zscore_MR)
+dd<-read.csv("Bornean_orangutan_seed_dispersal_distances_dataset.csv")
+dd<-tbl_df(dd)
+```
+
+```{r}
+#split dataset by Dispersal distance transit time and remove NA's
+
+#45 hour transit time seed dispersal distances 
+dd1<-filter(dd, DD.45 != "0")
+#60 hour transit time seed dispersal distances 
+dd2<-filter(dd, DD.60 != "0")
+#80 hour transit time seed dispersal distances 
+dd3<-filter(dd, DD.80 != "0")
+#125 hour transit time seed dispersal distances 
+dd4<-filter(dd, DD.125 != "0")
+```
+
+##Modeling Dispersal Distances by Gut Passage Duration
+The effect of gut passage time on modeled seed dispersal distances of Bornean orangutans 
+
+```{r}
+#recombine dispersal distances from across all four gut rention times
+disp_dist<-c(dd1$DD.45, dd2$DD.60, dd3$DD.80, dd4$DD.125)
+GRT<-c(rep("GRT45", length(dd1$DD.45)), rep("GRT60", length(dd2$DD.60)), rep("GRT80", length(dd3$DD.80)), rep("GRT125", length(dd4$DD.125)))
+dispersal<-data.frame(disp_dist, GRT)
+
+#Intercept (Null) Model
+#Model distribution: gamma, link function: log
+dd_m1<-glm(disp_dist~1, family = Gamma(link = "log"), data = dispersal)
+coef(dd_m1)
+summary(dd_m1)
+#Model with gut retention time(GRT) as a predictor
+dd_m2<-glm(disp_dist~GRT, family = Gamma(link = "log"), data = dispersal)
+summary(dd_m2)
+coef(dd_m2)
+exp(coef(dd_m2))
+exp(confint(dd_m2))
+confint(dd_m2)
+
+#AIC comparison
+AICtab(dd_m1, dd_m2, weights=TRUE, logLik=TRUE, base=TRUE)
+```
+##45 Hour Gut rention time (GRT) and & Seed Dispersal Distances
+````{r}
+#change to factors
+dd1$Orangutan<-as.factor(dd1$Orangutan)
+dd1$Age.sex<-as.factor(dd1$Age.sex)
+#If lost the the orangutan before 4 full days = 1, otherwise fill in with 0's
+dd1$lost<-as.factor(ifelse(dd1$Lost_unable_to_follow == "Y", 1 , 0))
+
+
+#intercept model:
+M45_1 = glmer(DD.45~1 +(1|Orangutan), family = Gamma(link = "log"), 
+          data = dd1,  
+          control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M45.1<-c("~1")
+summary(M45_1)
+
+#Models with predictor variables phenology (zscore_MR), orangutan age-sex class (Age.sex), and if the orangutan was lost during the follow series (lost)
+M45_2<-glmer(DD.45 ~ zscore_MR+ (1|Orangutan), family = Gamma(link = "log"), 
+          data = dd1,
+          control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+
+M45.2<-c("~phenology")
+
+M45_3<-glmer(DD.45 ~ lost + (1|Orangutan), family = Gamma(link = "log"), 
+           data = dd1,
+          control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+summary(M45_3)
+M45.3<-c("~lost")
+
+M45_4<-glmer(DD.45 ~ Age.sex + (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd1,
+              control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M45.4<-c("~age-sex")
+
+M45_5<-glmer(DD.45 ~ zscore_MR + lost+Age.sex + (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd1,
+             control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M45.5<-c("~phenology + lost + age-sex")
+
+M45_6<-glmer(DD.45 ~ Age.sex + lost + (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd1,
+              control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M45.6<-c("~age-sex + lost")
+
+M45_7<-glmer(DD.45 ~ Age.sex + zscore_MR + (1|Orangutan), family = Gamma(link = "log"), 
+           data = dd1,
+           control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M45.7<-c("~phenology + age-sex")
+
+M45_8<-glmer(DD.45 ~ lost + zscore_MR + (1|Orangutan), family = Gamma(link = "log"),
+           data = dd1,
+           control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M45.8<-c("~phenology + lost")
+summary(M45_8)
+
+AICtab(M45_1, M45_2, M45_3, M45_4, M45_5, M45_6, M45_7, M45_8, weights=TRUE, logLik=TRUE, base=TRUE)
+tab_45aic<-AICtab(M45_1, M45_2, M45_3, M45_4, M45_5, M45_6, M45_7, M45_8, weights=TRUE, logLik=TRUE, base=TRUE)
+names45<-c(M45.1, M45.2, M45.3, M45.4, M45.5, M45.6, M45.7, M45.8)
+rn<-c("M45_1", "M45_2", "M45_3", "M45_4", "M45_5", "M45_6", "M45_7","M45_8")
+
+table_45<-data.frame(rn, names45)
+tab_45aic<-as.data.frame(tab_45aic)
+#make row names into columns
+tab_45aic<-setDT(tab_45aic, keep.rownames = TRUE)[]
+table2_45<-merge(tab_45aic, table_45, by="rn")
+#sort by AIC
+table2_45 <- table2_45[order(AIC),]
+
+
+#How much variance is explained by each model?
+rsq(M45_3)
+rsq(M45_1)
+rsq(M45_8)
+```
+Create a table comparing model outputs
+```{r}
+knitr::kable(table2_45, digits=2, row.names = FALSE) 
+```
+##60 Hour GRT & Dispesal Distances
+````{r}
+#change to factors
+dd2$Orangutan<-as.factor(dd2$Orangutan)
+dd2$Age.sex<-as.factor(dd2$Age.sex)
+#If lost the the orangutan before 4 full days = 1, otherwise fill in with 0's
+dd2$lost<-as.factor(ifelse(dd2$Lost_unable_to_follow == "Y", 1 , 0))
+
+#intercept model:
+M60_1 = glmer(DD.60~1 +(1|Orangutan), family = Gamma(link = "log"), 
+              data = dd2,  
+              control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M60.1<-c("~1")
+
+#Models with predictor variables phenology (zscore_MR), orangutan age-sex class (Age.sex), and if the orangutan was lost during the follow series (lost)
+M60_2<-glmer(DD.60 ~ zscore_MR+ (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd2,
+             control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M60.2<-c("~phenology")
+
+M60_3<-glmer(DD.60 ~ lost + (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd2,
+             control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+summary(M60_3)
+M60.3<-c("~lost")
+
+M60_4<-glmer(DD.60 ~ Age.sex + (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd2,
+             control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M60.4<-c("~age-sex")
+
+M60_5<-glmer(DD.60 ~ zscore_MR + lost+Age.sex + (1|Orangutan), family = Gamma(link = "log"), 
+            data = dd2,
+            control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M60.5<-c("~phenology + lost + age-sex")
+
+M60_6<-glmer(DD.60 ~ Age.sex + lost + (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd2,
+             control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M60.6<-c("~age-sex + lost")
+summary(M60_6)
+
+M60_7<-glmer(DD.60 ~ Age.sex + zscore_MR + (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd2,
+            control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M60.7<-c("~phenology + age-sex")
+
+M60_8<-glmer(DD.60 ~ lost + zscore_MR + (1|Orangutan), family = Gamma(link = "log"),
+             data = dd2,
+             control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M60.8<-c("~phenology + lost")
+summary(M60_8)
+
+AICtab(M60_1, M60_2, M60_3, M60_4, M60_5, M60_6, M60_7, M60_8, weights=TRUE, logLik=TRUE, base=TRUE)
+tab_60aic<-AICtab(M60_1, M60_2, M60_3, M60_4, M60_5, M60_6, M60_7, M60_8, weights=TRUE, logLik=TRUE, base=TRUE)
+names60<-c(M60.1, M60.2, M60.3, M60.4, M60.5, M60.6, M60.7, M60.8)
+rn<-c("M60_1", "M60_2", "M60_3", "M60_4", "M60_5", "M60_6", "M60_7","M60_8")
+table_60<-data.frame(rn, names60)
+
+tab_60aic<-as.data.frame(tab_60aic)
+#make row names into columns
+tab_60aic<-setDT(tab_60aic, keep.rownames = TRUE)[]
+table2_60<-merge(tab_60aic, table_60, by="rn")
+#sort by AIC
+table2_60 <- table2_60[order(AIC),]
+
+#How much variance is explained by each top model
+rsq(M60_3)
+rsq(M60_8)
+```
+Create a table comparing model outputs
+```{r}
+kable(table2_60, digits=2, row.names = FALSE) 
+```
+##80 Hour GRT & Seed Dispersal Distances
+````{r}
+dd3$Orangutan<-as.factor(dd3$Orangutan)
+dd3$Age.sex<-as.factor(dd3$Age.sex)
+
+#intercept model:
+M80_1 = glmer(DD.80~1 +(1|Orangutan), family = Gamma(link = "log"), 
+              data = dd3,  
+              control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M80.1<-c("~1")
+summary(M80_1)
+
+#Models with predictor variables phenology (zscore_MR) and orangutan age-sex class (Age.sex)
+M80_2<-glmer(DD.80 ~ zscore_MR+ (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd3,
+             control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+
+M80.2<-c("~phenology")
+summary(M80_2)
+
+M80_3<-glmer(DD.80 ~ Age.sex + (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd3,
+            control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M80.3<-c("~age-sex")
+summary(M80_3)
+
+M80_4<-glmer(DD.80 ~ Age.sex + zscore_MR + (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd3,
+             control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M80.4<-c("~phenology + age-sex")
+
+AICtab(M80_1, M80_2, M80_3, M80_4, weights=TRUE, logLik=TRUE, base=TRUE)
+tab_80aic<-AICtab(M80_1, M80_2, M80_3, M80_4, weights=TRUE, logLik=TRUE, base=TRUE)
+names80<-c(M80.1, M80.2, M80.3, M80.4)
+rn<-c("M80_1", "M80_2", "M80_3", "M80_4")
+table_80<-data.frame(rn, names80)
+
+tab_80aic<-as.data.frame(tab_80aic)
+#make row names into columns
+tab_80aic<-setDT(tab_80aic, keep.rownames = TRUE)[]
+table2_80<-merge(tab_80aic, table_80, by="rn")
+#sort by AIC
+table2_80 <- table2_80[order(AIC),]
+
+#How much variance is explained by each top model
+rsq(M80_1)
+rsq(M80_2)
+```
+Create a table comparing model outputs
+```{r}
+knitr::kable(table2_80, digits=2, row.names = FALSE) 
+```
+
+##125 hour GRT & seed dispersal distances
+````{r}
+dd4$Orangutan<-as.factor(dd4$Orangutan)
+dd4$Age.sex<-as.factor(dd4$Age.sex)
+
+#intercept model:
+M125_1 = glmer(DD.125~1 +(1|Orangutan), family = Gamma(link = "log"), 
+              data = dd4,  
+              control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M125.1<-c("~1")
+summary(M125_1)
+
+#Models with predictor variables phenology (zscore_MR) and orangutan age-sex class (Age.sex)
+M125_2<-glmer(DD.125 ~ zscore_MR+ (1|Orangutan), family = Gamma(link = "log"), 
+            data = dd4,
+           control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+summary(M125_2)
+M125.2<-c("~phenology")
+
+M125_3<-glmer(DD.125 ~ Age.sex + (1|Orangutan), family = Gamma(link = "log"), 
+             data = dd4,
+            control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M125.3<-c("~age-sex")
+summary(M125_3)
+
+M125_4<-glmer(DD.125 ~ Age.sex + zscore_MR + (1|Orangutan), family = Gamma(link = "log"), 
+            data = dd4,
+            control = glmerControl(optimizer ='optimx', optCtrl=list(method='nlminb')))
+M125.4<-c("~phenology + age-sex")
+summary(M125_4)
+
+AICtab(M125_1, M125_2, M125_3, M125_4, weights=TRUE, logLik=TRUE, base=TRUE)
+
+tab_125aic<-AICtab(M125_1, M125_2, M125_3, M125_4, weights=TRUE, logLik=TRUE, base=TRUE)
+
+names125<-c(M125.1, M125.2, M125.3, M125.4)
+rn<-c("M125_1", "M125_2", "M125_3", "M125_4")
+table_125<-data.frame(rn, names125)
+
+tab_125aic<-as.data.frame(tab_125aic)
+#make row names into columns
+tab_125aic<-setDT(tab_125aic, keep.rownames = TRUE)[]
+table2_125<-merge(tab_125aic, table_125, by="rn")
+#sort by AIC
+table2_125 <- table2_125[order(AIC),]
+
+#How much variance is explained by each top model
+rsq(M125_2)
+rsq(M125_4)
+
+```
+Create a table comparing model outputs
+```{r}
+knitr::kable(table2_125, digits=2, row.names = FALSE) 
+```
+
+```{r}
+#By what percent does mean dispersal distance increase in lost & unable to follow series versus non-lost follow series?
+
+#45-hours
+((622-431)/431)*100
+#44.31%
+#for 45-hour seeds dispersal distances during lost  & unable to follow series were 44.3% longer than during not-lost follow series
+
+#60-hours
+((845-491)/491)*100
+#72.09%
+#for 60-hour seed dispersal distances during lost  & unable to follow series were 72.1% longer than during not-lost follow series
+```
+
