@@ -1,0 +1,446 @@
+---
+title: "Modeling Bornean Orangutan Seed Dispersal Across Habitats in Gunung Palung National Park, Indonesia"
+author: "Andrea Blackburn"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cowplot)
+library(lubridate)
+library(sm)
+library(MASS)
+library(lme4)
+library(effects)
+library(DHARMa)
+library(bbmle)
+library(stringr)
+library(gridExtra)
+library(MASS)
+library(rsq)
+library(knitr)
+library(data.table)
+
+library(extrafont)
+#font_import()
+#loadfonts(device = "win")
+#windowsFonts()
+```
+
+```{r}
+#read in seed dispersal distances dataset
+#dataset contains phenology data (column zscore_MR)
+dd<-read.csv("Bornean_orangutan_seed_dispersal_distances_dataset_12Dec22.csv")
+dd<-tbl_df(dd)
+
+#remove all NA's 
+dd1<-filter(dd, DD.45 != "0")
+dd2<-filter(dd, DD.60 != "0")
+dd3<-filter(dd, DD.80 != "0")
+dd4<-filter(dd, DD.125 != "0")
+```
+##Habitat Matching---------------------------------------------------------------------------- 
+Does the at habitat 45, 60, 80, 125 hours match the initial feeding habitat?  
+
+```{r}
+library(plyr)
+dd1$match45<-(dd1$Hab_Feed==dd1$Hab_T45)
+m45<-count((dd1$match45==TRUE))
+(m45[1,2]/(length(dd1$match45)))*100
+#35.4% do NOT match
+
+dd2$match60<-dd2$Hab_Feed==dd2$Hab_T60
+m60<-count(dd2$match60==TRUE)
+(m60[1,2]/(length(dd2$match60)))*100
+#45.9% do NOT match
+
+dd3$match80<-dd3$Hab_Feed==dd3$Hab_T80
+m80<-count(dd3$match80==TRUE)
+(m80[1,2]/(length(dd3$match80)))*100
+#47.2% do NOT match
+
+dd4$match125<-dd4$Hab_Feed==dd4$Hab_T125
+m125<-count(dd4$match125==TRUE)
+(m125[1,2]/(length(dd4$match125)))*100
+#41.9% do NOT match
+
+detach(package:plyr)
+``` 
+#----------------plotting seed dispersal across habitat types
+###45 hour dispersal distances
+Rearranging data for plot
+```{r}
+#paste to combine habitat types into one column
+dd1$habitat_pairs<-paste(dd1$Hab_Feed, dd1$Hab_T45)
+
+#group_by: count the number of each habitat pairs
+dd1_habs<-dd1%>%
+  group_by(habitat_pairs) %>%
+  summarize(hab_pairs= length(habitat_pairs))%>%
+  ungroup()
+
+dd1_plot<-merge(dd1, dd1_habs, by = "habitat_pairs")
+
+habs<-c(dd1_plot$Hab_Feed, dd1_plot$Hab_T45)
+hab_labels<-c(rep("feed", length(dd1_plot$Hab_Feed)), rep("hab45", length(dd1_plot$Hab_T45)))
+habitat_pairs<-c(dd1_plot$habitat_pairs, dd1_plot$habitat_pairs)
+hab_pairs<-c(dd1_plot$hab_pairs, dd1_plot$hab_pairs)
+
+dd1_plot2<-data.frame(habs, hab_labels, habitat_pairs, hab_pairs)
+dd1_plot2$hab_pairs<-as.factor(dd1_plot2$hab_pairs)
+
+dd1_plot2<-filter(dd1_plot2, habitat_pairs != "Alluvial Alluvial")
+dd1_plot2<-filter(dd1_plot2, habitat_pairs != "Peat Peat")
+dd1_plot2<-filter(dd1_plot2, habitat_pairs != "Lowland Lowland" )
+dd1_plot2<-filter(dd1_plot2, habitat_pairs != "Freshwater Freshwater")
+
+dd1_plot2$habs<-as.factor(dd1_plot2$habs)
+levels(dd1_plot2$habs)
+dd1_plot2$habs <- ordered(dd1_plot2$habs, levels = c("Peat", "Freshwater", "Alluvial", "Lowland"))
+dd1_plot2$habs <- factor(dd1_plot2$habs, levels=rev(levels(dd1_plot2$habs)))
+dd1_plot2$habs
+```
+#60 hours dispersal distances
+Rearranging data for plot
+```{r}
+#paste to combine habitat types into one column
+dd2$habitat_pairs<-paste(dd2$Hab_Feed, dd2$Hab_T60)
+
+#group_by: count the number of each habitat pairs
+dd2_habs<-dd2%>%
+  group_by(habitat_pairs) %>%
+  summarize(hab_pairs= length(habitat_pairs))%>%
+  ungroup()
+
+dd2_plot<-merge(dd2, dd2_habs, by = "habitat_pairs")
+
+habs<-c(dd2_plot$Hab_Feed, dd2_plot$Hab_T60)
+hab_labels<-c(rep("feed", length(dd2_plot$Hab_Feed)), rep("hab60", length(dd2_plot$Hab_T60)))
+habitat_pairs<-c(dd2_plot$habitat_pairs, dd2_plot$habitat_pairs)
+hab_pairs<-c(dd2_plot$hab_pairs, dd2_plot$hab_pairs)
+
+dd2_plot2<-data.frame(habs, hab_labels, habitat_pairs, hab_pairs)
+dd2_plot2$hab_pairs<-as.factor(dd2_plot2$hab_pairs)
+
+dd2_plot2<-filter(dd2_plot2, habitat_pairs != "Alluvial Alluvial")
+dd2_plot2<-filter(dd2_plot2, habitat_pairs != "Peat Peat")
+dd2_plot2<-filter(dd2_plot2, habitat_pairs != "Lowland Lowland" )
+dd2_plot2<-filter(dd2_plot2, habitat_pairs != "Freshwater Freshwater")
+
+dd2_plot2$habs<-as.factor(dd2_plot2$habs)
+levels(dd2_plot2$habs)
+dd2_plot2$habs <- ordered(dd2_plot2$habs, levels = c("Peat", "Freshwater", "Alluvial", "Lowland"))
+dd2_plot2$habs <- factor(dd2_plot2$habs, levels=rev(levels(dd2_plot2$habs)))
+dd2_plot2$habs
+```
+#80 hours dispersal distances 
+Rearranging data for plot
+```{r}
+#paste to combine habitat types into one column
+dd3$habitat_pairs<-paste(dd3$Hab_Feed, dd3$Hab_T80)
+
+#group_by: count the number of each habitat pairs
+dd3_habs<-dd3%>%
+  group_by(habitat_pairs) %>%
+  summarize(hab_pairs= length(habitat_pairs))%>%
+  ungroup()
+
+dd3_plot<-merge(dd3, dd3_habs, by = "habitat_pairs")
+
+habs<-c(dd3_plot$Hab_Feed, dd3_plot$Hab_T80)
+hab_labels<-c(rep("feed", length(dd3_plot$Hab_Feed)), rep("hab80", length(dd3_plot$Hab_T80)))
+habitat_pairs<-c(dd3_plot$habitat_pairs, dd3_plot$habitat_pairs)
+hab_pairs<-c(dd3_plot$hab_pairs, dd3_plot$hab_pairs)
+
+dd3_plot2<-data.frame(habs, hab_labels, habitat_pairs, hab_pairs)
+dd3_plot2$hab_pairs<-as.factor(dd3_plot2$hab_pairs)
+
+dd3_plot2<-filter(dd3_plot2, habitat_pairs != "Alluvial Alluvial")
+dd3_plot2<-filter(dd3_plot2, habitat_pairs != "Peat Peat")
+dd3_plot2<-filter(dd3_plot2, habitat_pairs != "Lowland Lowland" )
+dd3_plot2<-filter(dd3_plot2, habitat_pairs != "Freshwater Freshwater")
+
+dd3_plot2$habs<-as.factor(dd3_plot2$habs)
+levels(dd3_plot2$habs)
+dd3_plot2$habs <- ordered(dd3_plot2$habs, levels = c("Peat", "Freshwater", "Alluvial", "Lowland"))
+dd3_plot2$habs <- factor(dd3_plot2$habs, levels=rev(levels(dd3_plot2$habs)))
+dd3_plot2$habs
+```
+#125 Hours Dispersal Distances
+Rearranging data for plot
+```{r}
+#paste to combine habitat types into one column
+dd4$habitat_pairs<-paste(dd4$Hab_Feed, dd4$Hab_T125)
+
+#group_by: count the number of each habitat pairs
+dd4_habs<-dd4%>%
+  group_by(habitat_pairs) %>%
+  summarize(hab_pairs= length(habitat_pairs))%>%
+  ungroup()
+
+dd4_plot<-merge(dd4, dd4_habs, by = "habitat_pairs")
+
+habs<-c(dd4_plot$Hab_Feed, dd4_plot$Hab_T125)
+hab_labels<-c(rep("feed", length(dd4_plot$Hab_Feed)), rep("hab125", length(dd4_plot$Hab_T125)))
+habitat_pairs<-c(dd4_plot$habitat_pairs, dd4_plot$habitat_pairs)
+hab_pairs<-c(dd4_plot$hab_pairs, dd4_plot$hab_pairs)
+
+dd4_plot2<-data.frame(habs, hab_labels, habitat_pairs, hab_pairs)
+dd4_plot2$hab_pairs<-as.factor(dd4_plot2$hab_pairs)
+
+dd4_plot2<-filter(dd4_plot2, habitat_pairs != "Alluvial Alluvial")
+dd4_plot2<-filter(dd4_plot2, habitat_pairs != "Peat Peat")
+dd4_plot2<-filter(dd4_plot2, habitat_pairs != "Lowland Lowland" )
+dd4_plot2<-filter(dd4_plot2, habitat_pairs != "Freshwater Freshwater")
+
+dd4_plot2$habs<-as.factor(dd4_plot2$habs)
+levels(dd4_plot2$habs)
+dd4_plot2$habs <- ordered(dd4_plot2$habs, levels = c("Peat", "Freshwater", "Alluvial", "Lowland"))
+dd4_plot2$habs <- factor(dd4_plot2$habs, levels=rev(levels(dd4_plot2$habs)))
+dd4_plot2$habs
+levels(dd4_plot2$habs)
+```
+###function to make colors transparent (Thanks to A.J. Marshall)
+```{r}
+#all
+cols<-c("#566D7E", "#307D7E", "#B38481", "#7E354D", "#D4A017", "#C35817", "#C34A2C", "#800517", "#7D0541", "#614051")
+#colors: "Marble Blue","Greenish Blue", "Rosy Brown", "Velvet Maroon", "Orange Gold", "Red Fox", "Chestnut Red", "Firebrick", "Plum Pie", "Eggplant"
+
+my.alpha <- 100
+
+makeTransparent <- function(black, alpha = my.alpha){
+	newColor <- col2rgb(black)
+	apply(newColor, 2, function(curcoldata)			
+	     {rgb(red   = curcoldata[1],
+	          green = curcoldata[2],
+	          blue  = curcoldata[3],
+	          alpha = alpha,
+	          maxColorValue =  255)})
+}
+tcols = makeTransparent(cols)
+```
+
+Graphing modeled orangutan seed dispersal across habitat types in Gunung Palung National Park
+
+```{r}
+plot1<-ggplot(dd1_plot2, aes(x=hab_labels, y = habs, group= habitat_pairs, size=hab_pairs, color=hab_pairs)) + theme_bw()+
+    geom_line() +
+    scale_size_manual(values = c(1,2,3,4,5,6,7,8), labels=c("1", "2", "3", "4", "5", "6")) +
+     scale_color_manual(values=tcols)+
+    geom_point(size=1.5) +
+       xlab(" ") + ylab("Habitat Types") +
+        scale_x_discrete(labels=c("Initial Habitat", "45 Hours \n Post Dispersal Habitat"))+
+       scale_y_discrete(labels=c("Lowland \n Sandstone", "Alluvial \n Bench", "Freshwater \n Swamp", "Peat \n Swamp"))+
+       theme(axis.text.x = element_text(family = "Georgia", size=12)) +
+       theme(axis.text.y = element_text(family = "Georgia", size=12)) +
+       theme(axis.title.x = element_text(family = "Georgia", size=14))+
+       theme(axis.title.y = element_text(family = "Georgia", size=14))+
+       labs(size ="  Number of \n Observations", color = "  Number of \n Observations", size=12)+ 
+       theme(legend.title = element_text(family = "Georgia", size=12))+
+       theme(legend.text = element_text(family = "Georgia", size=10))+
+        guides(size = guide_legend(nrow = 3, byrow = TRUE))+
+      ggtitle("A") + 
+     theme(plot.title = element_text(lineheight=.8, face="bold",family = "Georgia", size=14))
+plot1
+
+#ggsave("DD45 Habitats 8Aug2020.png", plot=plot1, dpi=350, width =9, height =7)
+
+```
+
+```{r}
+cols_plot2<-c("#566D7E", "#307D7E", "#D4A017", "#800517", "#7D0541", "#614051")
+#cols_plot2<-c("Marble Blue",  "Greenish Blue", "Orange Gold", "Firebrick", "Plum Pie", "Eggplant") 
+
+tcols_plot2 <- makeTransparent(cols_plot2)
+
+plot2<-ggplot(dd2_plot2, aes(x=hab_labels, y = habs, group= habitat_pairs, size=hab_pairs, color=hab_pairs)) + theme_bw()+
+    geom_line() +
+    scale_size_manual(values = c(1,2,4,7,8,9), labels=c("1", "2", "5", "8", "9", "10")) +
+     scale_color_manual(values=tcols_plot2)+
+    geom_point(size=1.5) +
+    xlab(" ") + ylab("Habitat Types") +
+    scale_x_discrete(labels=c("Initial Habitat", "60 Hours \n Post Dispersal Habitat"))+
+   scale_y_discrete(labels=c("Lowland \n Sandstone", "Alluvial \n Bench", "Freshwater \n Swamp", "Peat \n Swamp"))+
+       theme(axis.text.x = element_text(family = "Georgia", size=12)) +
+       theme(axis.text.y = element_text(family = "Georgia", size=12)) +
+       theme(axis.title.x = element_text(family = "Georgia", size=14))+
+       theme(axis.title.y = element_text(family = "Georgia", size=14))+
+       theme(legend.title = element_text(family = "Georgia", size=12))+
+       theme(legend.text = element_text(family = "Georgia", size=10))+
+       labs(size ="  Number of \n Observations", color = "  Number of \n Observations", size=12)+ 
+       guides(size = guide_legend(nrow = 4, byrow = TRUE))+
+ ggtitle("B") + 
+     theme(plot.title = element_text(lineheight=.8, face="bold",family = "Georgia", size=14))
+      
+plot2
+
+#ggsave("DD60 Habitats.png", plot=plot2, dpi=350, width =9, height =7)
+```
+
+```{r}
+
+cols_plot3<-c("#307D7E", "#B38481", "#7E354D", "#D4A017", "#C35817", "#C34A2C", "#800517")
+ #cols_plot3<-c("Greenish Blue", "Rosy Brown", "Velvet Maroon", "Orange Gold", "Red Fox", "Chestnut Red", "Firebrick") 
+tcols_plot3 <- makeTransparent(cols_plot3)
+
+plot3<-ggplot(dd3_plot2, aes(x=hab_labels, y = habs, group= habitat_pairs, size=hab_pairs, color=hab_pairs)) + theme_bw()+
+    geom_line() +
+    scale_size_manual(values = c(2,3,4,5,6,7,8), labels=c("2", "3", "4", "5", "6","7", "8"))+
+    scale_color_manual(values=tcols_plot3)+
+    geom_point(size=1.5) +
+    xlab(" ") + ylab("Habitat Types") +
+    scale_x_discrete(labels=c("Initial Habitat", "80 Hours \n Post Dispersal Habitat"))+
+    scale_y_discrete(labels=c("Lowland \n Sandstone", "Alluvial \n Bench", "Freshwater \n Swamp", "Peat \n Swamp"))+
+       theme(axis.text.x = element_text(family = "Georgia", size=12)) +
+       theme(axis.text.y = element_text(family = "Georgia", size=12)) +
+       theme(axis.title.x = element_text(family = "Georgia", size=14))+
+       theme(axis.title.y = element_text(family = "Georgia", size=14)) +
+       theme(legend.title = element_text(family = "Georgia", size=12))+
+       theme(legend.text = element_text(family = "Georgia", size=10))+
+       labs(size ="  Number of \n Observations", color = "  Number of \n Observations", size=12)+ 
+      guides(size = guide_legend(nrow = 4, byrow = TRUE))+
+      ggtitle("C") + 
+     theme(plot.title = element_text(lineheight=.8, face="bold",family = "Georgia", size=14))
+plot3
+
+#ggsave("DD80 Habitats.png", plot=plot3, dpi=350, width =9, height =7)
+
+```
+
+```{r}
+cols_plot4<-c("#566D7E", "#307D7E")
+ #cols_plot4<-c("Marble Blue",  "Greenish Blue")
+tcols_plot4 <- makeTransparent(cols_plot4)
+
+plot4<-ggplot(dd4_plot2, aes(x=hab_labels, y = habs, group= habitat_pairs, size=hab_pairs, color=hab_pairs)) + theme_bw()+
+    geom_line() +
+    scale_size_manual(values = c(1,2,3,4,5,6,7,8), labels=c("1", "2", "3", "4", "5", "6", "7", "8")) +
+    scale_color_manual(values=tcols_plot4)+
+    geom_point(size=1.5) +
+    xlab(" ") + ylab("Habitat Types") +
+     scale_x_discrete(labels=c("Initial Habitat", "125 Hours \n Post Dispersal Habitat"))+
+    scale_y_discrete(labels=c("Lowland \n Sandstone", "Alluvial \n Bench", "Freshwater \n Swamp", "Peat \n Swamp"))+
+       theme(axis.text.x = element_text(family = "Georgia", size=12)) +
+       theme(axis.text.y = element_text(family = "Georgia", size=12)) +
+       theme(axis.title.x = element_text(family = "Georgia", size=14))+
+       theme(axis.title.y = element_text(family = "Georgia",size=14)) +
+       theme(legend.title = element_text(family = "Georgia", size=12))+
+       theme(legend.text = element_text(family = "Georgia", size=10))+
+       labs(size ="  Number of \n Observations", color = "  Number of \n Observations", size=12)+ 
+     guides(size = guide_legend(nrow = 1, byrow = TRUE))+
+     ggtitle("D") + 
+     theme(plot.title = element_text(lineheight=.8, face="bold",family = "Georgia", size=14))
+plot4
+
+#ggsave("DD125 Habitats.png", plot=plot4, dpi=350, width =9, height =7)
+```
+
+
+```{r}
+#plot all four plots 
+plots<-grid.arrange(plot1, plot2, plot3, plot4)
+plots
+#ggsave("Dispersal across habitats 9Feb2021.png", plot=plots, dpi=350, width =14, height =10)
+```
+
+###----Modeling Seed Dispersal Distances Across Habitat Types in Gunung Palung National Park-----------------------
+```{r}
+Habitatpair<-read.csv("Orangutan_seed_dispersal_habitats.csv")
+#remove all 0 occurrences
+Habitatpair<-filter(Habitatpair, Number >0)
+```
+Modeling the effect of gut retention time, initial habitat location, and ending habitat location on the number of seed dispersal events within and across habitats.Does gut retention time influence dispersal from and to habitats?
+
+```{r} 
+#Models use the number of occurrences of dispersal events between and within each habitat as the explanatory variable.
+#Models use a negative binomial distribution due to overdispresion (Zuur et al. 2009). Neg. binomial produced a better fitting model poisson.
+
+m_intercept_nb<-glm.nb(Number~1, data = Habitatpair)
+
+m1_nb<-glm.nb(Number~Initial_habitat+Dispersed_habitat, data = Habitatpair)
+
+m2_nb<-glm.nb(Number~GRT,  data = Habitatpair)
+
+m3_nb<-glm.nb(Number~GRT+Initial_habitat, data = Habitatpair)
+
+m4_nb<-glm.nb(Number~GRT+Initial_habitat+Dispersed_habitat, data = Habitatpair)
+
+m5_nb<-glm.nb(Number~GRT+Dispersed_habitat, data = Habitatpair)
+
+nb_tab<-AICtab(m_intercept_nb, m1_nb, m2_nb, m3_nb, m4_nb, m5_nb, weights=TRUE, logLik=TRUE, base=TRUE)
+nb_tab #model 3 (GRT + Initial Habitat type is the best model)
+nb_tab<-as.data.frame(nb_tab)
+
+#Reorder Dataframe Columns - both work
+nb_tab2<-nb_tab[,c(2,4,1,3,5,6)]
+nb_tab.2 <- nb_tab[, c("AIC", "dAIC", "logLik", "dLogLik", "df", "weight")]
+
+#variance explained by model
+rsq(m3_nb)
+```
+
+Print out AICtab as a table 
+```{r}
+kable(nb_tab.2, digits=2, row.names = TRUE) 
+kable(nb_tab2, digits=2, row.names = TRUE) 
+```
+
+```{r}
+summary(m3_nb)
+coef1<-as.data.frame(coef(m3_nb), make.names =TRUE)
+coef2<-setDT(coef1, keep.rownames = TRUE)[]
+
+ci1<-as.data.frame(confint(m3_nb))
+ci2<-setDT(ci1, keep.rownames = TRUE)[]
+ci2
+
+ci3<-as.data.frame(confint(m3_nb, level=0.50))
+ci4<-setDT(ci3, keep.rownames = TRUE)[]
+ci4
+m3_coef<-merge(merge(coef1, ci2, by = "rn", all = TRUE ), ci4, by = "rn", all = TRUE )
+
+# Rename columns
+names(m3_coef)[names(m3_coef) == "2.5 %"] <- "lwr95"
+names(m3_coef)[names(m3_coef) == "97.5 %"] <- "upr95"
+names(m3_coef)[names(m3_coef) == "25 %"] <- "lwr50"
+names(m3_coef)[names(m3_coef) == "75 %"] <- "upr50"
+names(m3_coef)[names(m3_coef) == "coef(m3_nb)"] <- "coef_est"
+
+m3_coef[2, 1] <- "45 Hour GRT"
+m3_coef[3, 1] <- "60 Hour GRT"
+m3_coef[4, 1] <- "80 Hour GRT"
+m3_coef[5, 1] <- "Initial Habitat Freshwater Swamp"
+m3_coef[6, 1] <- "Initial Habitat Lowland Swamp"
+m3_coef[7, 1] <- "Initial Habitat Peat Swamp"
+m3_coef2<-filter(m3_coef, rn!= "(Intercept)")
+m3_coef2
+```
+```{r}
+kable(m3_coef, digits=2, row.names = FALSE) 
+```
+###plotting coefficients from models 
+```{r}
+library(forcats)
+
+plot_c<-ggplot(data=m3_coef2, aes(x=coef_est, y=fct_rev(rn)))+geom_point()
+plot_c<-plot_c+theme_classic()+labs(x="Coefficient Estimate", y=" ")
+plot_c<-plot_c+geom_errorbar(aes(xmax=lwr95, xmin=upr95), width = 0.1, size  = 0.5) +
+  geom_point(size  = 2.7) + geom_hline(aes(yintercept=0), size = 0.9) +
+  theme(axis.title = element_text(family  = "Georgia", size=12)) + 
+  geom_errorbar(aes(xmax=lwr50, xmin=upr50), width = 0.1, size  = 1) +
+  theme(axis.text.x = element_text(family = "Georgia", size=12)) +
+  theme(axis.text.y = element_text(family = "Georgia", size=12)) +
+  theme(axis.title.x = element_text(family = "Georgia", size=12))+
+  theme(axis.title.y = element_text(family = "Georgia", size=12))+
+  geom_vline(xintercept=1, linetype="dashed")
+plot_c
+
+#ggsave("Dispersal Coefficients 10Feb2021.png", plot=plot_c, dpi=350, width =9, height =7)
+```
+
